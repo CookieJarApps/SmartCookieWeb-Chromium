@@ -6,13 +6,11 @@ import("//build/config/chromeos/ui_mode.gni")
 import("//extensions/buildflags/buildflags.gni")
 import("//printing/buildflags/buildflags.gni")
 
-if (!is_android) {
-  import("//build/config/features.gni")
-  import("//chrome/common/features.gni")
-  import("//tools/grit/grit_rule.gni")
-}
+import("//build/config/features.gni")
+import("//chrome/common/features.gni")
+import("//tools/grit/grit_rule.gni")
 
-if (!is_android) {
+if (true || !is_android) {
   _inspector_protocol = "//third_party/inspector_protocol"
   import("$_inspector_protocol/inspector_protocol.gni")
 
@@ -113,7 +111,7 @@ static_library("devtools") {
     "//ui/events:dom_keycode_converter",
   ]
 
-  if (!is_android) {
+  if (true || !is_android) {
     deps += [
       "//build:chromeos_buildflags",
       "//chrome:extra_resources",
@@ -233,7 +231,7 @@ static_library("devtools") {
   } else {
     sources += [ "devtools_dock_tile.cc" ]
   }
-  if (!is_android) {
+  if (true || !is_android) {
     deps += [
       ":protocol_generated_sources",
       "//chrome/app:command_ids",
@@ -280,7 +278,7 @@ static_library("test_support") {
   deps = []
   testonly = true
 
-  if (!is_android) {
+  if (true || !is_android) {
     deps += [
       ":devtools",
       "//base",

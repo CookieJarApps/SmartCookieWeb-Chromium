@@ -3160,6 +3160,10 @@ static_library("ui") {
       "//ui/webui",
     ]
   }
+  
+  if (is_android) {
+    deps += [ "//chrome/browser/ui/webui/snippets_internals:mojo_bindings" ]
+  }
 
   if (enable_one_click_signin) {
     sources += [
