@@ -1,0 +1,96 @@
+name: 'Chromium: Update files from upstream'
+
+on:
+  workflow_dispatch:
+    inputs:
+      NEW_CHROMIUM_MAJOR:
+        description: 'Major version of Chromium'     
+        required: true
+        default: '97'
+      NEW_CHROMIUM_MINOR:
+        description: 'Minor version of Chromium'     
+        required: true
+        default: '0'
+      NEW_CHROMIUM_BUILD:
+        description: 'Build version of Chromium'     
+        required: true
+        default: '4692'
+      NEW_CHROMIUM_PATCH:
+        description: 'Patch version of Chromium'     
+        required: true
+        default: '103'
+
+jobs:
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Disable Git auto-packing
+        run: git config --global gc.auto 0
+        
+      - name: Setting-up GitHub username
+        run: |
+          git config --global user.email "github@actions"
+          git config --global user.name "Repository manager"
+          
+      - name: Disabling Git pager (e.g. for git log)
+        run: git config --global core.pager 'cat'
+
+      - name: Preparing local Chromium branch
+        run: git switch chromium
+
+      - name: Loading settings from CHROMIUM_VERSION
+        run: |
+          if [ -f "CHROMIUM_VERSION" ]; then
+            source CHROMIUM_VERSION;
+            export $(cut -d= -f1 CHROMIUM_VERSION | grep -vF '#');
+            env | grep -F CHROMIUM_ >> $GITHUB_ENV
+          fi; 
+      - name: Listing source files
+        run: find . -type f | sed 's#\./#/#g' | grep -vFi '.gitignore' > /tmp/source_files.txt
+        
+      # https://github.blog/2020-12-21-get-up-to-speed-with-partial-clone-and-shallow-clone/
+      # git clone --filter=tree:0 <url> creates a treeless clone.
+      # These clones download all reachable commits while fetching trees and blobs on-demand. These clones are best for build environments where the repository will be deleted after a single build, but you still need access to commit history
+      - name: Checking out Chromium
+        run: git clone --filter=tree:0 --no-checkout https://github.com/chromium/chromium.git /tmp/chromium_new
+
+      - name: Limiting the list of files to checkout
+        run: cd /tmp/chromium_new && cat /tmp/source_files.txt | git sparse-checkout set --stdin
+
+      - name: Switching Chromium to new version
+        run: cd /tmp/chromium_new && git read-tree -mu ${{ github.event.inputs.NEW_CHROMIUM_MAJOR }}.${{ github.event.inputs.NEW_CHROMIUM_MINOR }}.${{ github.event.inputs.NEW_CHROMIUM_BUILD }}.${{ github.event.inputs.NEW_CHROMIUM_PATCH }}
+
+      - name: Copying files to local Chromium branch
+        run: rsync -avz --progress --exclude=".git" /tmp/chromium_new/* .
+
+      - name: Adding files to local Chromium branch
+        run: git add .
+
+      - name: Updating CHROMIUM_VERSION file
+        run: |
+          echo "CHROMIUM_MAJOR=${{ github.event.inputs.NEW_CHROMIUM_MAJOR }}" > CHROMIUM_VERSION
+          echo "CHROMIUM_MINOR=${{ github.event.inputs.NEW_CHROMIUM_MINOR }}" >> CHROMIUM_VERSION
+          echo "CHROMIUM_BUILD=${{ github.event.inputs.NEW_CHROMIUM_BUILD }}" >> CHROMIUM_VERSION
+          echo "CHROMIUM_PATCH=${{ github.event.inputs.NEW_CHROMIUM_PATCH }}" >> CHROMIUM_VERSION
+      - name: Creating pull request
+        id: pullrequest
+        uses: peter-evans/create-pull-request@v3
+        with:
+          branch: chromium_${{ github.event.inputs.NEW_CHROMIUM_MAJOR }}.${{ github.event.inputs.NEW_CHROMIUM_MINOR }}.${{ github.event.inputs.NEW_CHROMIUM_BUILD }}.${{ github.event.inputs.NEW_CHROMIUM_PATCH }}
+          base: chromium
+          delete-branch: true
+          signoff: true
+          title: "Update Chromium version ${{ env.CHROMIUM_MAJOR }}.${{ env.CHROMIUM_MINOR }}.${{ env.CHROMIUM_BUILD }}.${{ env.CHROMIUM_PATCH }} to ${{ github.event.inputs.NEW_CHROMIUM_MAJOR }}.${{ github.event.inputs.NEW_CHROMIUM_MINOR }}.${{ github.event.inputs.NEW_CHROMIUM_BUILD }}.${{ github.event.inputs.NEW_CHROMIUM_PATCH }}"
+          commit-message: "[Chromium] Update version ${{ env.CHROMIUM_MAJOR }}.${{ env.CHROMIUM_MINOR }}.${{ env.CHROMIUM_BUILD }}.${{ env.CHROMIUM_PATCH }} to ${{ github.event.inputs.NEW_CHROMIUM_MAJOR }}.${{ github.event.inputs.NEW_CHROMIUM_MINOR }}.${{ github.event.inputs.NEW_CHROMIUM_BUILD }}.${{ github.event.inputs.NEW_CHROMIUM_PATCH }}"
+          body: Version update initiated by ${{ github.actor }}
+
+      - name: Getting pull request URL
+        run: |
+          echo "Pull request number - ${{ steps.pullrequest.outputs.pull-request-number }}"
+          echo "Pull request URL - ${{ steps.pullrequest.outputs.pull-request-url }}"
